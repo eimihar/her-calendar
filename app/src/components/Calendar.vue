@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import Icon from './Icon.vue'
+import Button from './Button.vue'
 
 interface ScheduleRecord {
   id: string
@@ -294,21 +296,8 @@ function initScheduleForm() {
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-white">Custody Calendar</h1>
         <div class="flex items-center gap-2">
-          <button
-            @click="showScheduleHistoryModal = true"
-            class="p-2 rounded-xl bg-gray-700 text-white hover:bg-gray-600 transition-colors shadow-lg"
-            title="Schedule History"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-          </button>
-          <button
-            @click="showParentModal = true"
-            class="px-4 py-2 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors shadow-lg"
-          >
-            Parent Settings
-          </button>
+          <Button icon="lucide:clipboard-list" @click="showScheduleHistoryModal = true" title="Schedule History" />
+          <Button text="Parent Settings" icon="lucide:settings" @click="showParentModal = true" />
         </div>
       </div>
 
