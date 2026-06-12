@@ -33,6 +33,14 @@ interface ParentConfig {
   parent2Color: string
 }
 
+interface ScheduleChange {
+  id: string
+  timestamp: string
+  type: 'added' | 'removed' | 'updated'
+  description: string
+  recordId?: string
+}
+
 const events = ref<CalendarEvent[]>([])
 const showDateModal = ref(false)
 const selectedDate = ref('')
@@ -40,7 +48,9 @@ const dateModalTab = ref<'event' | 'schedule' | 'view'>('event')
 const newEventTitle = ref('')
 const selectedColor = ref('bg-amber-500')
 const showParentModal = ref(false)
-const showScheduleHistoryModal = ref(false)
+const showLogsModal = ref(false)
+const scheduleHistoryTab = ref<'records' | 'changes'>('records')
+const changeLogs = ref<ScheduleChange[]>([])
 
 const currentDate = ref(new Date(2026, 5, 12))
 
@@ -231,16 +241,34 @@ function openDateModal(dayInfo: CalendarDay) {
 
 function addEvent() {
   if (!newEventTitle.value.trim()) return
-  events.value.push({
+  const event = {
     id: Date.now(),
     title: newEventTitle.value,
     date: selectedDate.value,
     color: selectedColor.value
+  }
+  events.value.push(event)
+  changeLogs.value.unshift({
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    type: 'added',
+    description: `Added event "${event.title}" on ${event.date}`,
+    recordId: event.id.toString()
   })
   showDateModal.value = false
 }
 
 function deleteEvent(id: number) {
+  const event = events.value.find(e => e.id === id)
+  if (event) {
+    changeLogs.value.unshift({
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      type: 'removed',
+      description: `Removed event "${event.title}" from ${event.date}`,
+      recordId: id.toString()
+    })
+  }
   events.value = events.value.filter(e => e.id !== id)
 }
 
@@ -250,6 +278,7 @@ function applySchedule() {
   dayBefore.setDate(dayBefore.getDate() - 1)
   
   const recordsToRemove: string[] = []
+  const removedDescriptions: string[] = []
   
   scheduleRecords.value.forEach(record => {
     if (record.endDate === null) {
@@ -257,21 +286,45 @@ function applySchedule() {
       
       if (dayBefore < recordStart) {
         recordsToRemove.push(record.id)
+        removedDescriptions.push(`Removed schedule (${record.pattern}, ${record.startDate} - ${record.endDate || 'Present'}) starting with ${record.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`)
       } else {
         record.endDate = dayBefore.toISOString().split('T')[0]
+        changeLogs.value.unshift({
+          id: Date.now().toString(),
+          timestamp: new Date().toISOString(),
+          type: 'updated',
+          description: `Updated schedule end date to ${record.endDate} (was open-ended). ${record.pattern} pattern starting with ${record.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`,
+          recordId: record.id
+        })
       }
     }
   })
   
   scheduleRecords.value = scheduleRecords.value.filter(r => !recordsToRemove.includes(r.id))
   
-  scheduleRecords.value.push({
+  const newRecord: ScheduleRecord = {
     id: Date.now().toString(),
     pattern: scheduleFormConfig.value.pattern,
     startDate: selectedDate.value,
     endDate: scheduleFormConfig.value.endDate || null,
     startWeekWith: scheduleFormConfig.value.startWeekWith
+  }
+  
+  scheduleRecords.value.push(newRecord)
+  
+  let description = `Added new schedule (${newRecord.pattern}, ${newRecord.startDate} - ${newRecord.endDate || 'Present'}) starting with ${newRecord.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`
+  if (removedDescriptions.length > 0) {
+    description = removedDescriptions.join('; ') + '. ' + description
+  }
+  
+  changeLogs.value.unshift({
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    type: 'added',
+    description,
+    recordId: newRecord.id
   })
+  
   showDateModal.value = false
 }
 
@@ -296,7 +349,7 @@ function initScheduleForm() {
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-white">Custody Calendar</h1>
         <div class="flex items-center gap-2">
-          <Button icon="lucide:clipboard-list" @click="showScheduleHistoryModal = true" title="Schedule History" />
+          <Button icon="lucide:clipboard-list" @click="showLogsModal = true" title="Logs" />
           <Button text="Parent Settings" icon="lucide:settings" @click="showParentModal = true" />
         </div>
       </div>
@@ -626,11 +679,28 @@ function initScheduleForm() {
         </div>
       </div>
 
-      <div v-if="showScheduleHistoryModal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showScheduleHistoryModal = false">
+      <div v-if="showLogsModal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showLogsModal = false">
         <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl border border-gray-200 max-h-[80vh] overflow-y-auto">
-          <h3 class="text-lg font-semibold text-gray-800 mb-4">Schedule History</h3>
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Logs</h3>
           
-          <div class="space-y-3">
+          <div class="flex gap-2 mb-4">
+            <button
+              @click="scheduleHistoryTab = 'records'"
+              class="flex-1 px-4 py-2 rounded-lg font-medium transition-all"
+              :class="scheduleHistoryTab === 'records' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            >
+              Schedules
+            </button>
+            <button
+              @click="scheduleHistoryTab = 'changes'"
+              class="flex-1 px-4 py-2 rounded-lg font-medium transition-all"
+              :class="scheduleHistoryTab === 'changes' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            >
+              Changes
+            </button>
+          </div>
+          
+          <template v-if="scheduleHistoryTab === 'records'">
             <div
               v-for="(record, index) in scheduleRecords"
               :key="record.id"
@@ -675,11 +745,41 @@ function initScheduleForm() {
             <div v-if="scheduleRecords.length === 0" class="text-sm text-gray-400 text-center py-8">
               No schedule records yet
             </div>
-          </div>
+          </template>
+          
+          <template v-else>
+            <div class="space-y-3 max-h-60 overflow-y-auto">
+              <div
+                v-for="change in changeLogs"
+                :key="change.id"
+                class="p-3 rounded-lg border border-gray-200 bg-gray-50"
+              >
+                <div class="flex items-center gap-2 mb-1">
+                  <span
+                    class="text-xs px-2 py-1 rounded font-medium"
+                    :class="{
+                      'bg-emerald-100 text-emerald-700': change.type === 'added',
+                      'bg-red-100 text-red-700': change.type === 'removed',
+                      'bg-amber-100 text-amber-700': change.type === 'updated'
+                    }"
+                  >
+                    {{ change.type }}
+                  </span>
+                  <span class="text-xs text-gray-400">
+                    {{ new Date(change.timestamp).toLocaleString() }}
+                  </span>
+                </div>
+                <p class="text-sm text-gray-700">{{ change.description }}</p>
+              </div>
+              <div v-if="changeLogs.length === 0" class="text-sm text-gray-400 text-center py-8">
+                No changes recorded yet
+              </div>
+            </div>
+          </template>
 
           <div class="flex gap-3 mt-6">
             <button
-              @click="showScheduleHistoryModal = false"
+              @click="showLogsModal = false"
               class="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
             >
               Close
