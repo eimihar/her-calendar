@@ -1,17 +1,33 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 
-interface ScheduleConfig {
+interface ScheduleRecord {
+  id: string
   parent1Name: string
   parent2Name: string
   parent1Color: string
   parent2Color: string
   pattern: 'biweekly' | 'weekly'
   startDate: string
+  endDate: string | null
   startWeekWith: 'parent1' | 'parent2'
 }
 
-const events = ref<{ id: number; title: string; date: string; color: string }>([])
+interface CalendarDay {
+  day: number
+  month: number
+  year: number
+  isCurrentMonth: boolean
+}
+
+interface CalendarEvent {
+  id: number
+  title: string
+  date: string
+  color: string
+}
+
+const events = ref<CalendarEvent[]>([])
 const showScheduleModal = ref(false)
 const showAddEventModal = ref(false)
 const selectedDate = ref('')
@@ -20,15 +36,19 @@ const selectedColor = ref('bg-amber-500')
 
 const currentDate = ref(new Date(2026, 5, 12))
 
-const scheduleConfig = ref<ScheduleConfig>({
-  parent1Name: 'Me',
-  parent2Name: 'Them',
-  parent1Color: 'bg-amber-500',
-  parent2Color: 'bg-teal-500',
-  pattern: 'biweekly',
-  startDate: '2026-06-01',
-  startWeekWith: 'parent1'
-})
+const scheduleRecords = ref<ScheduleRecord[]>([
+  {
+    id: '1',
+    parent1Name: 'Me',
+    parent2Name: 'Them',
+    parent1Color: 'bg-amber-500',
+    parent2Color: 'bg-teal-500',
+    pattern: 'weekly',
+    startDate: '2026-06-01',
+    endDate: '2026-06-14',
+    startWeekWith: 'parent1'
+  }
+])
 
 const colors = ['bg-amber-500', 'bg-rose-500', 'bg-emerald-500', 'bg-orange-500', 'bg-teal-500', 'bg-pink-500']
 
@@ -43,12 +63,8 @@ const daysInMonth = computed(() => {
   return new Date(currentYear.value, currentMonth.value + 1, 0).getDate()
 })
 
-const firstDayOfMonth = computed(() => {
-  return (new Date(currentYear.value, currentMonth.value, 1).getDay() + 6) % 7
-})
-
 const calendarDays = computed(() => {
-  const days: { day: number; month: number; year: number; isCurrentMonth: boolean }[] = []
+  const days: CalendarDay[] = []
   const firstDay = new Date(currentYear.value, currentMonth.value, 1)
   const startDayOfWeek = (firstDay.getDay() + 6) % 7
   
@@ -73,9 +89,30 @@ const calendarDays = computed(() => {
   return days
 })
 
-function getCustodyForDay(dayInfo: { day: number; month: number; year: number }): string | null {
+const activeRecord = computed(() => {
+  return scheduleRecords.value.find(r => r.endDate === null) || scheduleRecords.value[0]
+})
+
+function getRecordForDate(dateStr: string): ScheduleRecord | null {
+  const targetDate = new Date(dateStr)
+  for (const record of scheduleRecords.value) {
+    const startDate = new Date(record.startDate)
+    const endDate = record.endDate ? new Date(record.endDate) : null
+    
+    if (targetDate >= startDate && (!endDate || targetDate <= endDate)) {
+      return record
+    }
+  }
+  return null
+}
+
+function getCustodyForDay(dayInfo: CalendarDay): string | null {
   const dateStr = `${dayInfo.year}-${String(dayInfo.month + 1).padStart(2, '0')}-${String(dayInfo.day).padStart(2, '0')}`
-  const startDate = new Date(scheduleConfig.value.startDate)
+  const record = getRecordForDate(dateStr)
+  
+  if (!record) return null
+  
+  const startDate = new Date(record.startDate)
   const currentDayDate = new Date(dateStr)
   
   const diffTime = currentDayDate.getTime() - startDate.getTime()
@@ -83,30 +120,34 @@ function getCustodyForDay(dayInfo: { day: number; month: number; year: number })
   
   if (diffDays < 0) return null
   
-  const weekDuration = scheduleConfig.value.pattern === 'biweekly' ? 14 : 7
+  const weekDuration = record.pattern === 'biweekly' ? 14 : 7
   const weekIndex = Math.floor(diffDays / weekDuration)
   const dayInWeek = diffDays % weekDuration
   
-  const isParent1Week = scheduleConfig.value.startWeekWith === 'parent1' 
+  const isParent1Week = record.startWeekWith === 'parent1' 
     ? weekIndex % 2 === 0 
     : weekIndex % 2 === 1
   
   if (dayInWeek < 7) {
-    return isParent1Week ? scheduleConfig.value.parent1Name : scheduleConfig.value.parent2Name
+    return isParent1Week ? record.parent1Name : record.parent2Name
   } else {
-    return isParent1Week ? scheduleConfig.value.parent2Name : scheduleConfig.value.parent1Name
+    return isParent1Week ? record.parent2Name : record.parent1Name
   }
 }
 
-function getCustodyColor(dayInfo: { day: number; month: number; year: number }): string | null {
+function getCustodyColor(dayInfo: CalendarDay): string | null {
+  const dateStr = `${dayInfo.year}-${String(dayInfo.month + 1).padStart(2, '0')}-${String(dayInfo.day).padStart(2, '0')}`
+  const record = getRecordForDate(dateStr)
+  if (!record) return null
+  
   const parent = getCustodyForDay(dayInfo)
   if (!parent) return null
-  return parent === scheduleConfig.value.parent1Name 
-    ? scheduleConfig.value.parent1Color 
-    : scheduleConfig.value.parent2Color
+  return parent === record.parent1Name 
+    ? record.parent1Color 
+    : record.parent2Color
 }
 
-function getEventsForDay(dayInfo: { day: number; month: number; year: number }) {
+function getEventsForDay(dayInfo: CalendarDay) {
   const dateStr = `${dayInfo.year}-${String(dayInfo.month + 1).padStart(2, '0')}-${String(dayInfo.day).padStart(2, '0')}`
   return events.value.filter(e => e.date === dateStr)
 }
@@ -119,7 +160,7 @@ function nextMonth() {
   currentDate.value = new Date(currentYear.value, currentMonth.value + 1, 1)
 }
 
-function openAddEventModal(dayInfo: { day: number; month: number; year: number }) {
+function openAddEventModal(dayInfo: CalendarDay) {
   const dateStr = `${dayInfo.year}-${String(dayInfo.month + 1).padStart(2, '0')}-${String(dayInfo.day).padStart(2, '0')}`
   selectedDate.value = dateStr
   newEventTitle.value = ''
@@ -143,7 +184,56 @@ function deleteEvent(id: number) {
 }
 
 function applySchedule() {
+  const newRecord: ScheduleRecord = {
+    id: Date.now().toString(),
+    parent1Name: formConfig.value.parent1Name,
+    parent2Name: formConfig.value.parent2Name,
+    parent1Color: formConfig.value.parent1Color,
+    parent2Color: formConfig.value.parent2Color,
+    pattern: formConfig.value.pattern,
+    startDate: formConfig.value.startDate,
+    endDate: null,
+    startWeekWith: formConfig.value.startWeekWith
+  }
+  
+  const newStartDate = new Date(newRecord.startDate)
+  
+  scheduleRecords.value.forEach(record => {
+    if (record.endDate === null) {
+      const recordStart = new Date(record.startDate)
+      if (newStartDate > recordStart) {
+        const dayBefore = new Date(newStartDate.getTime() - 24 * 60 * 60 * 1000)
+        record.endDate = dayBefore.toISOString().split('T')[0]
+      }
+    }
+  })
+  
+  scheduleRecords.value.push(newRecord)
   showScheduleModal.value = false
+}
+
+const formConfig = ref({
+  parent1Name: 'Me',
+  parent2Name: 'Them',
+  parent1Color: 'bg-amber-500',
+  parent2Color: 'bg-teal-500',
+  pattern: 'biweekly' as 'biweekly' | 'weekly',
+  startDate: '2026-07-01',
+  startWeekWith: 'parent1' as 'parent1' | 'parent2'
+})
+
+function openScheduleModal() {
+  const active = activeRecord.value
+  formConfig.value = {
+    parent1Name: active.parent1Name,
+    parent2Name: active.parent2Name,
+    parent1Color: active.parent1Color,
+    parent2Color: active.parent2Color,
+    pattern: active.pattern,
+    startDate: '',
+    startWeekWith: active.startWeekWith
+  }
+  showScheduleModal.value = true
 }
 </script>
 
@@ -153,7 +243,7 @@ function applySchedule() {
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-white">Custody Calendar</h1>
         <button
-          @click="showScheduleModal = true"
+          @click="openScheduleModal"
           class="px-4 py-2 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors shadow-lg"
         >
           Configure Schedule
@@ -183,15 +273,15 @@ function applySchedule() {
 
         <div class="flex items-center gap-4 px-6 py-3 bg-stone-50 border-b border-stone-200">
           <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full" :class="scheduleConfig.parent1Color"></div>
-            <span class="text-sm text-gray-600">{{ scheduleConfig.parent1Name }}</span>
+            <div class="w-3 h-3 rounded-full" :class="activeRecord.parent1Color"></div>
+            <span class="text-sm text-gray-600">{{ activeRecord.parent1Name }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full" :class="scheduleConfig.parent2Color"></div>
-            <span class="text-sm text-gray-600">{{ scheduleConfig.parent2Name }}</span>
+            <div class="w-3 h-3 rounded-full" :class="activeRecord.parent2Color"></div>
+            <span class="text-sm text-gray-600">{{ activeRecord.parent2Name }}</span>
           </div>
           <span class="text-xs text-gray-400 ml-auto">
-            {{ scheduleConfig.pattern === 'biweekly' ? 'Bi-weekly' : 'Weekly' }} pattern
+            {{ activeRecord.pattern === 'biweekly' ? 'Bi-weekly' : 'Weekly' }} pattern
           </span>
         </div>
 
@@ -250,15 +340,15 @@ function applySchedule() {
 
     <Teleport to="body">
       <div v-if="showScheduleModal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showScheduleModal = false">
-        <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl border border-gray-200">
+        <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl border border-gray-200 max-h-[90vh] overflow-y-auto">
           <h3 class="text-lg font-semibold text-gray-800 mb-4">Configure Custody Schedule</h3>
           
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-600 mb-1">{{ scheduleConfig.parent1Name }}</label>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Parent 1</label>
                 <input
-                  v-model="scheduleConfig.parent1Name"
+                  v-model="formConfig.parent1Name"
                   type="text"
                   placeholder="Parent 1 name"
                   class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -268,15 +358,15 @@ function applySchedule() {
                     v-for="color in colors"
                     :key="color"
                     class="w-7 h-7 rounded-full transition-all"
-                    :class="[color, scheduleConfig.parent1Color === color ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : 'opacity-60 hover:opacity-100']"
-                    @click="scheduleConfig.parent1Color = color"
+                    :class="[color, formConfig.parent1Color === color ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : 'opacity-60 hover:opacity-100']"
+                    @click="formConfig.parent1Color = color"
                   />
                 </div>
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-600 mb-1">{{ scheduleConfig.parent2Name }}</label>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Parent 2</label>
                 <input
-                  v-model="scheduleConfig.parent2Name"
+                  v-model="formConfig.parent2Name"
                   type="text"
                   placeholder="Parent 2 name"
                   class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -286,8 +376,8 @@ function applySchedule() {
                     v-for="color in colors"
                     :key="color"
                     class="w-7 h-7 rounded-full transition-all"
-                    :class="[color, scheduleConfig.parent2Color === color ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : 'opacity-60 hover:opacity-100']"
-                    @click="scheduleConfig.parent2Color = color"
+                    :class="[color, formConfig.parent2Color === color ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : 'opacity-60 hover:opacity-100']"
+                    @click="formConfig.parent2Color = color"
                   />
                 </div>
               </div>
@@ -297,16 +387,16 @@ function applySchedule() {
               <label class="block text-sm font-medium text-gray-600 mb-2">Pattern</label>
               <div class="flex gap-3">
                 <button
-                  @click="scheduleConfig.pattern = 'biweekly'"
+                  @click="formConfig.pattern = 'biweekly'"
                   class="flex-1 px-4 py-3 rounded-xl font-medium transition-all"
-                  :class="scheduleConfig.pattern === 'biweekly' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                  :class="formConfig.pattern === 'biweekly' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
                 >
                   Bi-weekly
                 </button>
                 <button
-                  @click="scheduleConfig.pattern = 'weekly'"
+                  @click="formConfig.pattern = 'weekly'"
                   class="flex-1 px-4 py-3 rounded-xl font-medium transition-all"
-                  :class="scheduleConfig.pattern === 'weekly' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                  :class="formConfig.pattern === 'weekly' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
                 >
                   Weekly
                 </button>
@@ -314,33 +404,33 @@ function applySchedule() {
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-600 mb-2">Starting Week</label>
+              <label class="block text-sm font-medium text-gray-600 mb-2">Start Date</label>
               <input
-                v-model="scheduleConfig.startDate"
+                v-model="formConfig.startDate"
                 type="date"
                 class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
-              <p class="text-xs text-gray-400 mt-1">Select when the custody arrangement began</p>
+              <p class="text-xs text-gray-400 mt-1">New schedule starts from this date. Previous will end the day before.</p>
             </div>
 
             <div>
               <label class="block text-sm font-medium text-gray-600 mb-2">Week Starts With</label>
               <div class="flex gap-3">
                 <button
-                  @click="scheduleConfig.startWeekWith = 'parent1'"
+                  @click="formConfig.startWeekWith = 'parent1'"
                   class="flex-1 px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
-                  :class="scheduleConfig.startWeekWith === 'parent1' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                  :class="formConfig.startWeekWith === 'parent1' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
                 >
-                  <div class="w-3 h-3 rounded-full" :class="scheduleConfig.parent1Color"></div>
-                  {{ scheduleConfig.parent1Name }}
+                  <div class="w-3 h-3 rounded-full" :class="formConfig.parent1Color"></div>
+                  {{ formConfig.parent1Name }}
                 </button>
                 <button
-                  @click="scheduleConfig.startWeekWith = 'parent2'"
+                  @click="formConfig.startWeekWith = 'parent2'"
                   class="flex-1 px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
-                  :class="scheduleConfig.startWeekWith === 'parent2' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                  :class="formConfig.startWeekWith === 'parent2' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
                 >
-                  <div class="w-3 h-3 rounded-full" :class="scheduleConfig.parent2Color"></div>
-                  {{ scheduleConfig.parent2Name }}
+                  <div class="w-3 h-3 rounded-full" :class="formConfig.parent2Color"></div>
+                  {{ formConfig.parent2Name }}
                 </button>
               </div>
             </div>
