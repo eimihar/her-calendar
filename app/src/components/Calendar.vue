@@ -243,17 +243,28 @@ function deleteEvent(id: number) {
 }
 
 function applySchedule() {
-  const activeRecord = scheduleRecords.value.find(r => r.endDate === null)
-  if (activeRecord) {
-    const dayBefore = new Date(selectedDate.value)
-    dayBefore.setDate(dayBefore.getDate() - 1)
+  const newStartDate = new Date(selectedDate.value)
+  const dayBefore = new Date(newStartDate)
+  dayBefore.setDate(dayBefore.getDate() - 1)
+  
+  const recordsToRemove: string[] = []
+  
+  scheduleRecords.value.forEach(record => {
+    const recordStart = new Date(record.startDate)
+    const recordEnd = record.endDate ? new Date(record.endDate) : null
     
-    if (dayBefore < new Date(activeRecord.startDate)) {
-      scheduleRecords.value = scheduleRecords.value.filter(r => r.id !== activeRecord.id)
-    } else {
-      activeRecord.endDate = dayBefore.toISOString().split('T')[0]
+    const overlaps = !recordEnd || recordEnd >= newStartDate
+    
+    if (overlaps) {
+      if (dayBefore < recordStart) {
+        recordsToRemove.push(record.id)
+      } else {
+        record.endDate = dayBefore.toISOString().split('T')[0]
+      }
     }
-  }
+  })
+  
+  scheduleRecords.value = scheduleRecords.value.filter(r => !recordsToRemove.includes(r.id))
   
   scheduleRecords.value.push({
     id: Date.now().toString(),
