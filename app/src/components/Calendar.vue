@@ -247,7 +247,12 @@ function applySchedule() {
   if (activeRecord) {
     const dayBefore = new Date(selectedDate.value)
     dayBefore.setDate(dayBefore.getDate() - 1)
-    activeRecord.endDate = dayBefore.toISOString().split('T')[0]
+    
+    if (dayBefore < new Date(activeRecord.startDate)) {
+      scheduleRecords.value = scheduleRecords.value.filter(r => r.id !== activeRecord.id)
+    } else {
+      activeRecord.endDate = dayBefore.toISOString().split('T')[0]
+    }
   }
   
   scheduleRecords.value.push({
