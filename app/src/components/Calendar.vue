@@ -38,6 +38,7 @@ const dateModalTab = ref<'event' | 'schedule' | 'view'>('event')
 const newEventTitle = ref('')
 const selectedColor = ref('bg-amber-500')
 const showParentModal = ref(false)
+const showScheduleHistoryModal = ref(false)
 
 const currentDate = ref(new Date(2026, 5, 12))
 
@@ -54,7 +55,7 @@ const parentConfig = ref<ParentConfig>({
 const scheduleRecords = ref<ScheduleRecord[]>([
   {
     id: '1',
-    pattern: 'biweekly',
+    pattern: 'weekly',
     startDate: '2026-06-01',
     endDate: null,
     startWeekWith: 'parent1'
@@ -134,6 +135,21 @@ const recordForSelectedDate = computed(() => {
     return selected >= start && (!end || selected <= end)
   })
 })
+
+function getRecordStatus(record: ScheduleRecord): 'active' | 'past' | 'upcoming' {
+  if (record.endDate === null) {
+    const start = new Date(record.startDate)
+    if (today >= start) {
+      return 'active'
+    }
+    return 'upcoming'
+  }
+  const end = new Date(record.endDate)
+  if (today > end) {
+    return 'past'
+  }
+  return 'active'
+}
 
 function getRecordForDate(dateStr: string): ScheduleRecord | null {
   const targetDate = new Date(dateStr)
@@ -258,12 +274,23 @@ function initScheduleForm() {
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center justify-between mb-4">
         <h1 class="text-2xl font-bold text-white">Custody Calendar</h1>
-        <button
-          @click="showParentModal = true"
-          class="px-4 py-2 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors shadow-lg"
-        >
-          Parent Settings
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            @click="showScheduleHistoryModal = true"
+            class="p-2 rounded-xl bg-gray-700 text-white hover:bg-gray-600 transition-colors shadow-lg"
+            title="Schedule History"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+          </button>
+          <button
+            @click="showParentModal = true"
+            class="px-4 py-2 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition-colors shadow-lg"
+          >
+            Parent Settings
+          </button>
+        </div>
       </div>
 
       <div class="bg-white rounded-2xl shadow-lg border border-amber-100 overflow-hidden">
@@ -498,9 +525,8 @@ function initScheduleForm() {
                   </span>
                 </div>
                 <div class="text-sm text-gray-700">
-                  <span class="font-medium">{{ recordForSelectedDate.startDate }}</span>
-                  <span class="text-gray-400 mx-1">-</span>
-                  <span class="font-medium">{{ recordForSelectedDate.endDate || 'Present' }}</span>
+                  <span class="font-medium">From {{ recordForSelectedDate.startDate }}</span>
+                  <span class="font-medium">{{ recordForSelectedDate.endDate ? ` to ${recordForSelectedDate.endDate}` : '' }}</span>
                 </div>
                 <div class="flex items-center gap-2 mt-2">
                   <div class="w-3 h-3 rounded-full" :class="recordForSelectedDate.startWeekWith === 'parent1' ? parentConfig.parent1Color : parentConfig.parent2Color"></div>
@@ -574,6 +600,68 @@ function initScheduleForm() {
           <div class="flex gap-3 mt-6">
             <button
               @click="showParentModal = false"
+              class="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showScheduleHistoryModal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showScheduleHistoryModal = false">
+        <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl border border-gray-200 max-h-[80vh] overflow-y-auto">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Schedule History</h3>
+          
+          <div class="space-y-3">
+            <div
+              v-for="(record, index) in scheduleRecords"
+              :key="record.id"
+              class="p-4 rounded-lg border-2 transition-all"
+              :class="{
+                'border-emerald-400 bg-emerald-50': getRecordStatus(record) === 'active',
+                'border-gray-300 bg-gray-50': getRecordStatus(record) === 'past',
+                'border-amber-300 bg-amber-50': getRecordStatus(record) === 'upcoming'
+              }"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium uppercase" :class="{
+                  'text-emerald-600': getRecordStatus(record) === 'active',
+                  'text-gray-500': getRecordStatus(record) === 'past',
+                  'text-amber-600': getRecordStatus(record) === 'upcoming'
+                }">
+                  {{ record.pattern === 'biweekly' ? 'Bi-weekly' : 'Weekly' }}
+                </span>
+                <span
+                  class="text-xs px-2 py-1 rounded font-medium"
+                  :class="{
+                    'bg-emerald-100 text-emerald-700': getRecordStatus(record) === 'active',
+                    'bg-gray-200 text-gray-500': getRecordStatus(record) === 'past',
+                    'bg-amber-200 text-amber-700': getRecordStatus(record) === 'upcoming'
+                  }"
+                >
+                  {{ getRecordStatus(record) === 'active' ? 'Active' : getRecordStatus(record) === 'past' ? 'Past' : 'Upcoming' }}
+                </span>
+              </div>
+              <div class="text-sm text-gray-700 font-medium">
+                <span>From {{ record.startDate }}</span>
+<!--                <span class="text-gray-400 mx-2">→</span>-->
+                <span>{{ record.endDate ? ` to ${record.endDate}` : '' }}</span>
+              </div>
+              <div class="flex items-center gap-2 mt-2">
+                <div class="w-3 h-3 rounded-full" :class="record.startWeekWith === 'parent1' ? parentConfig.parent1Color : parentConfig.parent2Color"></div>
+                <span class="text-sm text-gray-600">
+                  Starts with {{ record.startWeekWith === 'parent1' ? parentConfig.parent1Name : parentConfig.parent2Name }}
+                </span>
+              </div>
+            </div>
+            <div v-if="scheduleRecords.length === 0" class="text-sm text-gray-400 text-center py-8">
+              No schedule records yet
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-6">
+            <button
+              @click="showScheduleHistoryModal = false"
               class="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
             >
               Close
