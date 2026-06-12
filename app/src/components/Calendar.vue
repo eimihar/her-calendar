@@ -58,7 +58,7 @@ const scheduleRecords = ref<ScheduleRecord[]>([
     pattern: 'weekly',
     startDate: '2026-06-01',
     endDate: null,
-    startWeekWith: 'parent1'
+    startWeekWith: 'parent2'
   }
 ])
 
