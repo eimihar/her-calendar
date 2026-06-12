@@ -250,12 +250,9 @@ function applySchedule() {
   const recordsToRemove: string[] = []
   
   scheduleRecords.value.forEach(record => {
-    const recordStart = new Date(record.startDate)
-    const recordEnd = record.endDate ? new Date(record.endDate) : null
-    
-    const overlaps = !recordEnd || recordEnd >= newStartDate
-    
-    if (overlaps) {
+    if (record.endDate === null) {
+      const recordStart = new Date(record.startDate)
+      
       if (dayBefore < recordStart) {
         recordsToRemove.push(record.id)
       } else {
@@ -270,7 +267,7 @@ function applySchedule() {
     id: Date.now().toString(),
     pattern: scheduleFormConfig.value.pattern,
     startDate: selectedDate.value,
-    endDate: null,
+    endDate: scheduleFormConfig.value.endDate || null,
     startWeekWith: scheduleFormConfig.value.startWeekWith
   })
   showDateModal.value = false
@@ -278,7 +275,8 @@ function applySchedule() {
 
 const scheduleFormConfig = ref({
   pattern: 'biweekly' as 'biweekly' | 'weekly',
-  startWeekWith: 'parent1' as 'parent1' | 'parent2'
+  startWeekWith: 'parent1' as 'parent1' | 'parent2',
+  endDate: ''
 })
 
 function initScheduleForm() {
@@ -286,6 +284,7 @@ function initScheduleForm() {
     scheduleFormConfig.value.pattern = activeRecord.value.pattern
     scheduleFormConfig.value.startWeekWith = activeRecord.value.startWeekWith
   }
+  scheduleFormConfig.value.endDate = ''
 }
 </script>
 
@@ -508,6 +507,16 @@ function initScheduleForm() {
                     {{ parentConfig.parent2Name }}
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-600 mb-2">End Date <span class="text-gray-400 font-normal">(optional)</span></label>
+                <input
+                  v-model="scheduleFormConfig.endDate"
+                  type="date"
+                  :min="selectedDate"
+                  class="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
               </div>
             </div>
 
