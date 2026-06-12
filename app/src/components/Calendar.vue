@@ -137,18 +137,22 @@ const recordForSelectedDate = computed(() => {
 })
 
 function getRecordStatus(record: ScheduleRecord): 'active' | 'past' | 'upcoming' {
+  const start = new Date(record.startDate)
+
   if (record.endDate === null) {
-    const start = new Date(record.startDate)
     if (today >= start) {
       return 'active'
     }
     return 'upcoming'
+  } else if (today >= start) {
+    const end = new Date(record.endDate)
+    if (today > end) {
+      return 'past'
+    }
+    return 'active'
+  } else {
+    return 'upcoming';
   }
-  const end = new Date(record.endDate)
-  if (today > end) {
-    return 'past'
-  }
-  return 'active'
 }
 
 function getRecordForDate(dateStr: string): ScheduleRecord | null {
