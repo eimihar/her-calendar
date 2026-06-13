@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import moment from 'moment'
 import Icon from './Icon.vue'
 import Button from './Button.vue'
 
@@ -57,10 +58,8 @@ const uiSettings = ref({
   showHolidays: false
 })
 
-const currentDate = ref(new Date(2026, 5, 12))
-
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+const currentDate = ref(moment('2026-06-12'))
+const today = moment().startOf('day')
 
 const parentConfig = ref<ParentConfig>({
   parent1Name: 'Me',
@@ -81,43 +80,41 @@ const scheduleRecords = ref<ScheduleRecord[]>([
 
 const colors = ['bg-amber-500', 'bg-rose-500', 'bg-emerald-500', 'bg-orange-500', 'bg-teal-500', 'bg-pink-500']
 
-const currentMonth = computed(() => currentDate.value.getMonth())
-const currentYear = computed(() => currentDate.value.getFullYear())
+const currentMonth = computed(() => currentDate.value.month())
+const currentYear = computed(() => currentDate.value.year())
 
 const monthName = computed(() => {
-  return currentDate.value.toLocaleString('default', { month: 'long', year: 'numeric' })
+  return currentDate.value.format('MMMM YYYY')
 })
 
 const daysInMonth = computed(() => {
-  return new Date(currentYear.value, currentMonth.value + 1, 0).getDate()
+  return currentDate.value.daysInMonth()
 })
 
 const calendarDays = computed(() => {
   const days: CalendarDay[] = []
-  const firstDay = new Date(currentYear.value, currentMonth.value, 1)
-  const startDayOfWeek = (firstDay.getDay() + 6) % 7
+  const firstDay = currentDate.value.clone().startOf('month')
+  const startDayOfWeek = (firstDay.day() + 6) % 7
   
   for (let i = startDayOfWeek - 1; i >= 0; i--) {
-    const date = new Date(currentYear.value, currentMonth.value, -i)
-    date.setHours(0, 0, 0, 0)
+    const date = firstDay.clone().subtract(i, 'days')
     days.push({ 
-      day: date.getDate(), 
-      month: date.getMonth(), 
-      year: date.getFullYear(), 
+      day: date.date(), 
+      month: date.month(), 
+      year: date.year(), 
       isCurrentMonth: false,
-      isPast: date < today
+      isPast: date.isBefore(today, 'day')
     })
   }
   
   for (let i = 1; i <= daysInMonth.value; i++) {
-    const date = new Date(currentYear.value, currentMonth.value, i)
-    date.setHours(0, 0, 0, 0)
+    const date = firstDay.clone().date(i)
     days.push({ 
       day: i, 
       month: currentMonth.value, 
       year: currentYear.value, 
       isCurrentMonth: true,
-      isPast: date < today
+      isPast: date.isBefore(today, 'day')
     })
   }
   
@@ -126,14 +123,14 @@ const calendarDays = computed(() => {
   const remaining = gridSize - days.length
   
   for (let i = 1; i <= remaining; i++) {
-    const date = new Date(currentYear.value, currentMonth.value + 1, i)
-    date.setHours(0, 0, 0, 0)
+    const date = firstDay.clone().add(daysInMonth.value + i - 1, 'days').date() + i - 1
+    const dateObj = firstDay.clone().add(daysInMonth.value, 'days').date(i)
     days.push({ 
-      day: date.getDate(), 
-      month: date.getMonth(), 
-      year: date.getFullYear(), 
+      day: dateObj.date(), 
+      month: dateObj.month(), 
+      year: dateObj.year(), 
       isCurrentMonth: false,
-      isPast: date < today
+      isPast: dateObj.isBefore(today, 'day')
     })
   }
   
@@ -146,24 +143,24 @@ const activeRecord = computed(() => {
 
 const recordForSelectedDate = computed(() => {
   return scheduleRecords.value.find(r => {
-    const start = new Date(r.startDate)
-    const end = r.endDate ? new Date(r.endDate) : null
-    const selected = new Date(selectedDate.value)
-    return selected >= start && (!end || selected <= end)
+    const start = moment(r.startDate)
+    const end = r.endDate ? moment(r.endDate) : null
+    const selected = moment(selectedDate.value)
+    return selected.isSameOrAfter(start, 'day') && (!end || selected.isSameOrBefore(end, 'day'))
   })
 })
 
 function getRecordStatus(record: ScheduleRecord): 'active' | 'past' | 'upcoming' {
-  const start = new Date(record.startDate)
+  const start = moment(record.startDate)
 
   if (record.endDate === null) {
-    if (today >= start) {
+    if (today.isSameOrAfter(start, 'day')) {
       return 'active'
     }
     return 'upcoming'
-  } else if (today >= start) {
-    const end = new Date(record.endDate)
-    if (today > end) {
+  } else if (today.isSameOrAfter(start, 'day')) {
+    const end = moment(record.endDate)
+    if (today.isAfter(end, 'day')) {
       return 'past'
     }
     return 'active'
@@ -173,12 +170,12 @@ function getRecordStatus(record: ScheduleRecord): 'active' | 'past' | 'upcoming'
 }
 
 function getRecordForDate(dateStr: string): ScheduleRecord | null {
-  const targetDate = new Date(dateStr)
+  const targetDate = moment(dateStr)
   for (const record of scheduleRecords.value) {
-    const startDate = new Date(record.startDate)
-    const endDate = record.endDate ? new Date(record.endDate) : null
+    const startDate = moment(record.startDate)
+    const endDate = record.endDate ? moment(record.endDate) : null
     
-    if (targetDate >= startDate && (!endDate || targetDate <= endDate)) {
+    if (targetDate.isSameOrAfter(startDate, 'day') && (!endDate || targetDate.isSameOrBefore(endDate, 'day'))) {
       return record
     }
   }
@@ -191,11 +188,10 @@ function getCustodyForDay(dayInfo: CalendarDay): string | null {
   
   if (!record) return null
   
-  const startDate = new Date(record.startDate)
-  const currentDayDate = new Date(dateStr)
+  const startDate = moment(record.startDate)
+  const currentDayDate = moment(dateStr)
   
-  const diffTime = currentDayDate.getTime() - startDate.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  const diffDays = currentDayDate.diff(startDate, 'days')
   
   if (diffDays < 0) return null
   
@@ -228,11 +224,11 @@ function getEventsForDay(dayInfo: CalendarDay) {
 }
 
 function prevMonth() {
-  currentDate.value = new Date(currentYear.value, currentMonth.value - 1, 1)
+  currentDate.value = currentDate.value.clone().subtract(1, 'month').startOf('month')
 }
 
 function nextMonth() {
-  currentDate.value = new Date(currentYear.value, currentMonth.value + 1, 1)
+  currentDate.value = currentDate.value.clone().add(1, 'month').startOf('month')
 }
 
 function openDateModal(dayInfo: CalendarDay) {
@@ -255,7 +251,7 @@ function addEvent() {
   events.value.push(event)
   changeLogs.value.unshift({
     id: Date.now().toString(),
-    timestamp: new Date().toISOString(),
+    timestamp: moment().toISOString(),
     type: 'added',
     description: `Added event "${event.title}" on ${event.date}`,
     recordId: event.id.toString()
@@ -268,7 +264,7 @@ function deleteEvent(id: number) {
   if (event) {
     changeLogs.value.unshift({
       id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
+      timestamp: moment().toISOString(),
       type: 'removed',
       description: `Removed event "${event.title}" from ${event.date}`,
       recordId: id.toString()
@@ -278,25 +274,24 @@ function deleteEvent(id: number) {
 }
 
 function applySchedule() {
-  const newStartDate = new Date(selectedDate.value)
-  const dayBefore = new Date(newStartDate)
-  dayBefore.setDate(dayBefore.getDate() - 1)
+  const newStartDate = moment(selectedDate.value)
+  const dayBefore = newStartDate.clone().subtract(1, 'day')
   
   const recordsToRemove: string[] = []
   const removedDescriptions: string[] = []
   
   scheduleRecords.value.forEach(record => {
     if (record.endDate === null) {
-      const recordStart = new Date(record.startDate)
+      const recordStart = moment(record.startDate)
       
-      if (dayBefore < recordStart) {
+      if (dayBefore.isBefore(recordStart, 'day')) {
         recordsToRemove.push(record.id)
         removedDescriptions.push(`Removed schedule (${record.pattern}, ${record.startDate} - ${record.endDate || 'Present'}) starting with ${record.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`)
       } else {
-        record.endDate = dayBefore.toISOString().split('T')[0]
+        record.endDate = dayBefore.format('YYYY-MM-DD')
         changeLogs.value.unshift({
           id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
+          timestamp: moment().toISOString(),
           type: 'updated',
           description: `Updated schedule end date to ${record.endDate} (was open-ended). ${record.pattern} pattern starting with ${record.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`,
           recordId: record.id
@@ -324,7 +319,7 @@ function applySchedule() {
   
   changeLogs.value.unshift({
     id: Date.now().toString(),
-    timestamp: new Date().toISOString(),
+    timestamp: moment().toISOString(),
     type: 'added',
     description,
     recordId: newRecord.id
@@ -772,7 +767,7 @@ function initScheduleForm() {
                     {{ change.type }}
                   </span>
                   <span class="text-xs text-gray-400">
-                    {{ new Date(change.timestamp).toLocaleString() }}
+                    {{ moment(change.timestamp).format('MMM D, YYYY h:mm A') }}
                   </span>
                 </div>
                 <p class="text-sm text-gray-700">{{ change.description }}</p>
