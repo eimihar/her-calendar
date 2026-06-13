@@ -329,7 +329,7 @@ function applySchedule() {
 }
 
 const scheduleFormConfig = ref({
-  pattern: 'biweekly' as 'biweekly' | 'weekly',
+  pattern: 'weekly' as 'biweekly' | 'weekly',
   startWeekWith: 'parent1' as 'parent1' | 'parent2',
   endDate: ''
 })
@@ -340,6 +340,19 @@ function initScheduleForm() {
     scheduleFormConfig.value.startWeekWith = activeRecord.value.startWeekWith
   }
   scheduleFormConfig.value.endDate = ''
+}
+
+function clearAllSchedules() {
+  scheduleRecords.value.forEach(record => {
+    changeLogs.value.unshift({
+      id: Date.now().toString(),
+      timestamp: moment().toISOString(),
+      type: 'removed',
+      description: `Removed schedule (${record.pattern}, ${record.startDate} - ${record.endDate || 'Present'}) starting with ${record.startWeekWith === 'parent1' ? parentConfig.value.parent1Name : parentConfig.value.parent2Name}`,
+      recordId: record.id
+    })
+  })
+  scheduleRecords.value = []
 }
 </script>
 
@@ -746,6 +759,13 @@ function initScheduleForm() {
             <div v-if="scheduleRecords.length === 0" class="text-sm text-gray-400 text-center py-8">
               No schedule records yet
             </div>
+            <button
+              v-else
+              @click="clearAllSchedules"
+              class="w-full mt-4 px-4 py-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors font-medium text-sm"
+            >
+              Clear All Schedules
+            </button>
           </template>
           
           <template v-else>
