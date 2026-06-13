@@ -49,8 +49,13 @@ const newEventTitle = ref('')
 const selectedColor = ref('bg-amber-500')
 const showParentModal = ref(false)
 const showLogsModal = ref(false)
+const showSettingsModal = ref(false)
 const scheduleHistoryTab = ref<'records' | 'changes'>('records')
 const changeLogs = ref<ScheduleChange[]>([])
+
+const uiSettings = ref({
+  showHolidays: false
+})
 
 const currentDate = ref(new Date(2026, 5, 12))
 
@@ -350,7 +355,8 @@ function initScheduleForm() {
         <h1 class="text-2xl font-bold text-white">Custody Calendar</h1>
         <div class="flex items-center gap-2">
           <Button icon="lucide:clipboard-list" @click="showLogsModal = true" title="Logs" />
-          <Button text="Parent Settings" icon="lucide:settings" @click="showParentModal = true" />
+          <Button icon="lucide:settings" @click="showSettingsModal = true" title="Settings" />
+          <Button text="Parent Settings" icon="lucide:users" @click="showParentModal = true" />
         </div>
       </div>
 
@@ -780,6 +786,40 @@ function initScheduleForm() {
           <div class="flex gap-3 mt-6">
             <button
               @click="showLogsModal = false"
+              class="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showSettingsModal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-50" @click.self="showSettingsModal = false">
+        <div class="bg-white rounded-2xl p-6 w-[480px] shadow-2xl border border-gray-200">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Settings</h3>
+          
+          <div class="space-y-4">
+            <div class="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-200">
+              <div>
+                <p class="font-medium text-gray-800">Show Holidays</p>
+                <p class="text-sm text-gray-500">Display public holidays on the calendar</p>
+              </div>
+              <button
+                @click="uiSettings.showHolidays = !uiSettings.showHolidays"
+                class="relative w-14 h-8 rounded-full transition-colors"
+                :class="uiSettings.showHolidays ? 'bg-amber-500' : 'bg-gray-300'"
+              >
+                <span
+                  class="absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform"
+                  :class="uiSettings.showHolidays ? 'left-7' : 'left-1'"
+                ></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-6">
+            <button
+              @click="showSettingsModal = false"
               class="flex-1 px-4 py-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors font-medium"
             >
               Close
